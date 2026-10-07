@@ -26,7 +26,7 @@ ELEVENLABS_API_KEY: str | None = _secret("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID: str | None = _secret("ELEVENLABS_VOICE_ID")
 ELEVENLABS_VOICE_ID_2: str | None = _secret("ELEVENLABS_VOICE_ID_2")  # optional 2nd voice for dialogues
 ELEVENLABS_MODEL: str = _secret("ELEVENLABS_MODEL", "eleven_v4_turbo") or "eleven_v4_turbo"
-ELEVENLABS_LANGUAGE_CODE: str | None = _secret("ELEVENLABS_LANGUAGE_CODE")  # optional, e.g. "pl"
+ELEVENLABS_LANGUAGE_CODE: str | None = _secret("ELEVENLABS_LANGUAGE_CODE") or "pl"
 
 DATA_DIR: Path = Path(_secret("DATA_DIR", "data") or "data")
 
