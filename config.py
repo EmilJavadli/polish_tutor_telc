@@ -1,4 +1,3 @@
-"""Configuration. Secrets are read from .streamlit/secrets.toml (falls back to env vars)."""
 import os
 from pathlib import Path
 
