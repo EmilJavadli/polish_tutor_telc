@@ -23,6 +23,16 @@ from storage.repository import LessonRepository
 
 st.set_page_config(page_title="Polish Tutor · TELC B1", page_icon="🇵🇱", layout="wide")
 
+if not st.user.is_logged_in:
+    st.title("🇵🇱 Polish Tutor")
+    st.write("Please sign in to continue.")
+    st.button("Sign in with Google", on_click=st.login)
+    st.stop()
+
+with st.sidebar:
+    st.caption(f"Signed in as {st.user.name}")
+    st.button("Sign out", on_click=st.logout)
+
 QUIZ_TYPE_LABELS = {
     "multiple_choice": "Choose the correct answer",
     "fill_blank": "Fill in the gap with the correct form",
