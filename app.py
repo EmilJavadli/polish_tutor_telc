@@ -28,7 +28,7 @@ if not st.user.is_logged_in:
     st.stop()
 
 st.write(f"Welcome, {st.user.name}")
-st.write(st.user.email)
+# st.write(st.user.email)
 
 if st.button("Log out"):
     st.logout()
