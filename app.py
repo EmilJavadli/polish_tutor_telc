@@ -164,8 +164,9 @@ def render_listening(lesson: Lesson) -> None:
 
 
 def render_words(lesson: Lesson) -> None:
-    title = ("The 15 most important and difficult words in today's text"
-             if lesson.lesson_type == "lesson" else "This week's 15 key words (review)")
+    plan = get_plan_day(lesson.day)
+    title = (f"The {plan.target_words} most useful new words for today's {plan.level} lesson"
+             if lesson.lesson_type == "lesson" else f"This week's {plan.target_words} key words (review)")
     st.write(f"**{title}**")
     for i, v in enumerate(lesson.new_vocabulary, start=1):
         with st.expander(f"{i}. **{v.polish}**: {v.english}"):
@@ -176,9 +177,11 @@ def render_words(lesson: Lesson) -> None:
 
 
 def render_grammar(lesson: Lesson) -> None:
-    st.write("**Today's 3 grammar points from the TELC B1 syllabus, all used in the text**")
+    plan = get_plan_day(lesson.day)
+    st.write(f"**Grammar at {plan.level}: {len(plan.new_grammar_ids)} new focus point(s), plus spaced review**")
     for i, g in enumerate(lesson.grammar_rules, start=1):
-        with st.expander(f"{i}. {g.title}", expanded=(i == 1)):
+        marker = "🆕" if g.id in plan.new_grammar_ids else "🔁"
+        with st.expander(f"{marker} {i}. {g.title}", expanded=(g.id in plan.new_grammar_ids)):
             st.write(g.explanation)
             if g.pattern:
                 st.code(g.pattern, language=None)
@@ -240,8 +243,12 @@ def render_exercises(lesson: Lesson) -> None:
 def render_writing(lesson: Lesson) -> None:
     plan = get_plan_day(lesson.day)
     lo, hi = plan.writing_length
-    st.caption(f"TELC *Pisanie*: choose 1 of 2 tasks and cover **all** points. Target: {lo}-{hi} words. "
-               "In the exam you have 30 minutes for a semi-formal e-mail.")
+    if lesson.level == "A0":
+        st.caption(f"Guided beginner writing: choose 1 task and write {lo}-{hi} words using the prompts.")
+    elif lesson.level in ("A1", "A2"):
+        st.caption(f"Progressive writing practice: choose 1 task and cover all points. Target: {lo}-{hi} words.")
+    else:
+        st.caption(f"TELC *Pisanie*: choose 1 of 2 tasks and cover **all** points. Target: {lo}-{hi} words.")
     labels = [f"Task {i + 1}: {t.situation_en}" for i, t in enumerate(lesson.writing_tasks)]
     idx = st.radio("Choose a task", list(range(len(labels))), format_func=lambda i: labels[i],
                    key=f"w_task_{lesson.day}")
@@ -256,8 +263,9 @@ def render_writing(lesson: Lesson) -> None:
     words = len(text.split())
     st.caption(f"Words: {words}")
     if submitted:
-        if words < max(10, lo // 2):
-            st.warning(f"Please write at least {max(10, lo // 2)} words.")
+        minimum = max(5, lo // 2) if lesson.level == "A0" else max(10, lo // 2)
+        if words < minimum:
+            st.warning(f"Please write at least {minimum} words.")
         else:
             with st.spinner("Your examiner is reading…"):
                 try:
@@ -280,7 +288,10 @@ def render_writing(lesson: Lesson) -> None:
 
 def render_speaking(lesson: Lesson) -> None:
     s = lesson.speaking
-    st.markdown(f"**TELC {SPEAKING_PART_NAMES.get(s.part, f'Part {s.part}')}**")
+    plan = get_plan_day(lesson.day)
+    heading = (SPEAKING_PART_NAMES.get(s.part, f"Part {s.part}")
+               if lesson.level == "B1" else plan.speaking_mode.title())
+    st.markdown(f"**{heading}**")
     st.subheader(s.title)
     st.markdown(f"{s.instructions_pl}  \n*{s.instructions_en}*")
     st.markdown("\n".join(f"- {p}" for p in s.prompts))
@@ -291,7 +302,8 @@ def render_speaking(lesson: Lesson) -> None:
         st.table([{"Polish": p.polish, "English": p.english} for p in s.useful_phrases])
     st.text_area("Preparation notes (keywords only; in TELC, reading a script lowers your score)",
                  key=f"notes_{lesson.day}", height=80)
-    st.caption("Speak for 1-3 minutes. Pronunciation is not assessed: feedback is based on a transcript.")
+    duration = "20-45 seconds" if lesson.level == "A0" else ("45-90 seconds" if lesson.level == "A1" else "1-3 minutes")
+    st.caption(f"Aim for {duration}. Pronunciation is not assessed: feedback is based on a transcript.")
 
     n = len(repo.attempts(lesson.day, "speaking"))
     rec = st.audio_input("🎙️ Record your answer", key=f"rec_{lesson.day}_{n}")
@@ -316,8 +328,9 @@ def render_speaking(lesson: Lesson) -> None:
     with st.expander("⌨️ No microphone? Type what you would say"):
         typed = st.text_area("Your answer", key=f"typed_{lesson.day}_{n}")
         if st.button("Submit typed answer", key=f"typed_send_{lesson.day}_{n}"):
-            if len(typed.split()) < 10:
-                st.warning("Please write at least 10 words.")
+            minimum = 5 if lesson.level == "A0" else 10
+            if len(typed.split()) < minimum:
+                st.warning(f"Please write at least {minimum} words.")
             else:
                 with st.spinner("Assessing…"):
                     try:
@@ -453,10 +466,11 @@ def render_plan_page() -> None:
             f"({current.phase}).")
     for month in range(1, 10):
         weeks = [w for w in WEEKS if w.month == month]
-        with st.expander(f"Month {month}: {weeks[0].phase}", expanded=(month == current.month)):
+        with st.expander(f"Month {month}: {get_plan_day((weeks[0].number-1)*7+1).phase}", expanded=(month == current.month)):
             for w in weeks:
                 marker = "👉 " if w.number == current.week else ""
-                st.markdown(f"{marker}**Week {w.number}: {w.theme_en}** *({w.theme_pl})* · {w.level}")
+                week_plan = get_plan_day((w.number - 1) * 7 + 1)
+                st.markdown(f"{marker}**Week {w.number}: {w.theme_en}** *({w.theme_pl})* · {week_plan.level}")
                 st.caption("Grammar: " + "; ".join(GRAMMAR[g][0] for g in w.grammar))
                 st.caption("Situations: " + "; ".join(w.situations))
                 st.caption("Writing: " + w.writing_focus)
@@ -478,7 +492,7 @@ with st.sidebar:
     current_day = repo.current_day
     plan_today = get_plan_day(current_day)
     st.markdown(f"**Day {current_day}/{TOTAL_DAYS}** · Week {plan_today.week} · Month {plan_today.month}  \n"
-                f"{plan_today.level} · {plan_today.theme_en}")
+                f"{plan_today.level} · {plan_today.theme_en} · {plan_today.target_words} words")
     st.progress(min(current_day, TOTAL_DAYS) / TOTAL_DAYS)
 
     days = sorted(set(repo.lesson_days()) | {current_day}, reverse=True)

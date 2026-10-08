@@ -32,17 +32,21 @@ class TestCurriculum(unittest.TestCase):
         used = {g for w in WEEKS for g in w.grammar}
         self.assertEqual(used, set(GRAMMAR))
 
-    def test_each_day_has_3_distinct_grammar_points(self):
+    def test_grammar_load_is_calibrated(self):
         for d in range(1, TOTAL_DAYS + 1):
-            self.assertEqual(len(set(get_plan_day(d).grammar_ids)), 3, d)
+            plan = get_plan_day(d)
+            self.assertLessEqual(len(plan.new_grammar_ids), 1, d)
+            self.assertLessEqual(len(set(plan.grammar_ids)), 3, d)
+            self.assertGreaterEqual(len(plan.grammar_ids), 1, d)
 
     def test_day_7_is_review(self):
         self.assertEqual(get_plan_day(7).lesson_type, "review")
         self.assertEqual(get_plan_day(8).lesson_type, "lesson")
 
     def test_levels_progress(self):
-        self.assertEqual(get_plan_day(1).level, "A1")
-        self.assertEqual(get_plan_day(60).level, "A2")
+        self.assertEqual(get_plan_day(1).level, "A0")
+        self.assertEqual(get_plan_day(29).level, "A1")
+        self.assertEqual(get_plan_day(64).level, "A2")
         self.assertEqual(get_plan_day(273).level, "B1")
 
     def test_plan_markdown(self):
@@ -59,7 +63,7 @@ class TestValidation(unittest.TestCase):
         self.assertTrue(any("grammar_rules ids" in p for p in validate_core(core, get_plan_day(1), [], [])))
 
     def test_known_word_rejected(self):
-        p = validate_core(make_core(), get_plan_day(1), ["kawa"], [])
+        p = validate_core(make_core(), get_plan_day(1), ["sąsiadka"], [])
         self.assertTrue(any("already known" in x for x in p))
 
     def test_review_words_must_be_from_week(self):
@@ -132,13 +136,13 @@ class TestRepository(unittest.TestCase):
         self.repo.add_attempt(1, "speaking", SpeakingAttempt(transcript="t", result=self._fb(), timestamp="t"))
         self.assertTrue(self.repo.update_completion(1, dt.date(2026, 10, 5)))
         stats = self.repo.stats(dt.date(2026, 10, 5))
-        self.assertEqual((stats["lessons"], stats["words"], stats["grammar"], stats["streak"]), (1, 15, 3, 1))
+        self.assertEqual((stats["lessons"], stats["words"], stats["grammar"], stats["streak"]), (1, 8, 1, 1))
 
     def test_review_lessons_do_not_add_words(self):
         self.repo.save_lesson(make_lesson(1))
         self.repo.save_lesson(make_lesson(7))
-        self.assertEqual(len(self.repo.taught_words()), 15)
-        self.assertEqual(len(self.repo.week_words(1)), 15)
+        self.assertEqual(len(self.repo.taught_words()), 8)
+        self.assertEqual(len(self.repo.week_words(1)), 8)
 
     def test_reset_day(self):
         self.repo.add_attempt(2, "exercises", ExerciseAttempt(score=1, answers={}, correct={}))

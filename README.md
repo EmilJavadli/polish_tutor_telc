@@ -1,6 +1,6 @@
 # 🇵🇱 Polish Tutor: 9-month TELC Polski B1 plan
 
-Streamlit app that takes you from A0 to TELC B1 in 39 weeks (273 lessons, ~1 hour/day).
+Streamlit app with a true A0 start that builds toward TELC B1 in 39 weeks (273 lessons, ~1 hour/day).
 See **PLAN.md** for the full plan (also on the 📅 Plan page in the app).
 
 ## Every lesson (all 4 TELC skills)
@@ -8,8 +8,8 @@ See **PLAN.md** for the full plan (also on the 📅 Plan page in the app).
 |---|---|---|
 | 📖 Reading | 10′ | TELC-type text (e-mail, forum, notices, official text, article, story), slow/normal audio |
 | 🎧 Listening | 10′ | separate recording in TELC format (voice messages, dialogue, interview, opinions) + 5 tasks |
-| 🔤 Words | 5′ | the 15 most important and difficult words |
-| 📐 Grammar | 5′ | 3 grammar points from the syllabus (day's focus + review) |
+| 🔤 Words | 5′ | 8/10/12/15 new words as your level grows |
+| 📐 Grammar | 5′ | at most 1 new grammar point, plus spaced review |
 | ✏️ Exercises | 10′ | 19 exercises: vocabulary, grammar, TELC *Elementy języka*; answers explained |
 | 📝 Writing | 10′ | choose 1 of 2 tasks, examiner feedback: 4 criteria × 5 pts, corrections |
 | 🗣️ Speaking | 5′ | TELC part 1/2/3 rotating; record → transcript → feedback (or type) |
@@ -47,4 +47,13 @@ agent/tts.py               ElevenLabs: reading + dialogues (2 voices)
 agent/tutor_chat.py        tutor chat
 storage/repository.py      data/ (lessons, audio, recordings, progress.json)
 ```
-# polish_tutor_telc
+
+
+### A0 calibration
+- Weeks 1-4: A0 / Pre-A1, 8 words/day, one new grammar focus, 45-80 word reading, guided writing and survival speaking.
+- Weeks 5-9: A1, 10 words/day.
+- Weeks 10-17: A2, 12 words/day.
+- Weeks 18-30: B1 build, 15 words/day.
+- Weeks 31-35: B1 consolidation.
+- Weeks 36-39: authentic TELC exam training.
+TELC task shapes appear early, but B1 difficulty does not.

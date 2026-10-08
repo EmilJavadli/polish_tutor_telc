@@ -5,15 +5,15 @@ Every lesson trains reading, listening, vocabulary, grammar (Elementy języka), 
 
 | Month | Week | Phase | Level | Theme | Grammar focus | Writing |
 |---|---|---|---|---|---|---|
-| 1 | 1 | Foundations (A1) | A1 | Introductions (Poznajmy się) | Polish sounds and spelling; Personal pronouns and the verb 'być'; Noun gender | short informal message (SMS, note or e-mail to a friend) |
-| 1 | 2 | Foundations (A1) | A1 | Family and people (Rodzina i ludzie) | Present tense: -m/-sz verbs; Present tense: -ę/-isz/-ysz verbs; Questions and negation | short informal message (SMS, note or e-mail to a friend) |
-| 1 | 3 | Foundations (A1) | A1 | Home and flat (Dom i mieszkanie) | Present tense: -ę/-esz verbs; Adjective agreement (nominative singular); Numbers, age and prices | short informal message (SMS, note or e-mail to a friend) |
-| 1 | 4 | Foundations (A1) | A1 | Food and shopping (Jedzenie i zakupy) | Accusative singular; Possessive pronouns | short informal message (SMS, note or e-mail to a friend) |
-| 2 | 5 | Foundations (A1) | A1 | Work and professions (Praca i zawody) | Instrumental singular; Locative singular | short informal message (SMS, note or e-mail to a friend) |
-| 2 | 6 | Foundations (A1) | A1 | Daily routine and time (Dzień i czas) | Genitive singular; Time expressions | short informal message (SMS, note or e-mail to a friend) |
-| 2 | 7 | Foundations (A1) | A1 | City and transport (Miasto i transport) | Modal verbs + infinitive; Verbs of motion: iść/jechać vs chodzić/jeździć | short informal message (SMS, note or e-mail to a friend) |
-| 2 | 8 | Foundations (A1) | A1 | Free time (A1 review) (Czas wolny) | Where to / where: prepositions of place and direction; Accusative singular; Locative singular; Genitive singular | short informal message (SMS, note or e-mail to a friend) |
-| 3 | 9 | Elementary (A2) | A2 | What happened? (past events) (Co się stało?) | Past tense (regular); Past tense (irregular forms) | informal or semi-formal e-mail |
+| 1 | 1 | A0 / Pre-A1 | A0 | Introductions (Poznajmy się) | Polish sounds and spelling; Personal pronouns and the verb 'być'; Noun gender | guided personal sentences |
+| 1 | 2 | A0 / Pre-A1 | A0 | Family and people (Rodzina i ludzie) | Present tense: -m/-sz verbs; Present tense: -ę/-isz/-ysz verbs; Questions and negation | guided personal sentences |
+| 1 | 3 | A0 / Pre-A1 | A0 | Home and flat (Dom i mieszkanie) | Present tense: -ę/-esz verbs; Adjective agreement (nominative singular); Numbers, age and prices | guided personal sentences |
+| 1 | 4 | A0 / Pre-A1 | A0 | Food and shopping (Jedzenie i zakupy) | Accusative singular; Possessive pronouns | guided personal sentences |
+| 2 | 5 | Foundations (A1) | A1 | Work and professions (Praca i zawody) | Instrumental singular; Locative singular | short informal message |
+| 2 | 6 | Foundations (A1) | A1 | Daily routine and time (Dzień i czas) | Genitive singular; Time expressions | short informal message |
+| 2 | 7 | Foundations (A1) | A1 | City and transport (Miasto i transport) | Modal verbs + infinitive; Verbs of motion: iść/jechać vs chodzić/jeździć | short informal message |
+| 2 | 8 | Foundations (A1) | A1 | Free time (A1 review) (Czas wolny) | Where to / where: prepositions of place and direction; Accusative singular; Locative singular; Genitive singular | short informal message |
+| 3 | 9 | Foundations (A1) | A1 | What happened? (past events) (Co się stało?) | Past tense (regular); Past tense (irregular forms) | short informal message |
 | 3 | 10 | Elementary (A2) | A2 | Health (Zdrowie) | Verb aspect: introduction; Aspect pairs | informal or semi-formal e-mail |
 | 3 | 11 | Elementary (A2) | A2 | Plans and the future (Plany na przyszłość) | Future tense: imperfective; Future tense: perfective | informal or semi-formal e-mail |
 | 3 | 12 | Elementary (A2) | A2 | People and relationships (Ludzie i relacje) | Plural: nominative (non-masculine-personal); Plural: masculine-personal | informal or semi-formal e-mail |

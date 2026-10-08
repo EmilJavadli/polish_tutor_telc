@@ -10,6 +10,22 @@ DAYS_PER_WEEK = 7
 TOTAL_WEEKS = 39
 TOTAL_DAYS = DAYS_PER_WEEK * TOTAL_WEEKS  # 273
 
+# Difficulty is calibrated to a true A0 starting point. TELC task shapes appear early,
+# but TELC B1 difficulty is introduced only after the language foundation is built.
+STAGE_BY_WEEK = {
+    **{w: ("A0 / Pre-A1", "A0") for w in range(1, 5)},
+    **{w: ("Foundations (A1)", "A1") for w in range(5, 10)},
+    **{w: ("Elementary (A2)", "A2") for w in range(10, 18)},
+    **{w: ("Intermediate (B1)", "B1") for w in range(18, 31)},
+    **{w: ("B1 consolidation", "B1") for w in range(31, 36)},
+    **{w: ("TELC exam training", "B1") for w in range(36, 40)},
+}
+VOCAB_TARGET = {"A0": 8, "A1": 10, "A2": 12, "B1": 15}
+READING_LENGTH = {"A0": (45, 80), "A1": (80, 140), "A2": (150, 240), "B1": (250, 350)}
+LISTENING_LENGTH = {"A0": (30, 60), "A1": (50, 100), "A2": (100, 170), "B1": (150, 250)}
+WRITING_LENGTH = {"A0": (15, 35), "A1": (30, 60), "A2": (60, 100), "B1": (100, 150)}
+
+
 # ---------------------------------------------------------------------------
 # Grammar syllabus (ordered). TELC does not publish a separate grammar list;
 # this follows CEFR A1 -> B1 progression and the forms tested in the TELC
@@ -302,9 +318,6 @@ SPEAKING_PART_NAMES = {
     3: "Part 3: discussion on a controversial topic",
 }
 
-READING_LENGTH = {"A1": (110, 170), "A2": (170, 250), "B1": (250, 350)}
-LISTENING_LENGTH = {"A1": (60, 110), "A2": (100, 170), "B1": (150, 250)}
-WRITING_LENGTH = {"A1": (30, 60), "A2": (60, 100), "B1": (100, 150)}
 
 
 @dataclass(frozen=True)
@@ -319,7 +332,11 @@ class PlanDay:
     theme_pl: str
     situation: str
     lesson_type: str            # "lesson" | "review"
-    grammar_ids: tuple[str, str, str]
+    grammar_ids: tuple[str, ...]
+    new_grammar_ids: tuple[str, ...]
+    target_words: int
+    scaffolding: str
+    speaking_mode: str
     text_type: str
     listening_type: str
     speaking_part: int
@@ -342,61 +359,77 @@ def _earlier_grammar(week_number: int) -> list[str]:
     return seen
 
 
-def _grammar_for_day(week: Week, dow: int, day: int) -> tuple[str, str, str]:
-    """3 grammar points: the day's focus point from the week's list, then other
-    week points, then spaced review of earlier weeks."""
-    own = list(week.grammar)
-    if dow == DAYS_PER_WEEK:          # review day: the week's own points first
-        chosen = own[:3]
-    else:
-        start = (dow - 1) % len(own)
-        rotated = own[start:] + own[:start]
-        chosen = rotated[:2] if len(rotated) >= 2 else rotated[:]
-    pool = [g for g in _earlier_grammar(week.number) if g not in chosen]
-    i = day
-    while len(chosen) < 3 and pool:
-        candidate = pool[i % len(pool)]
-        chosen.append(candidate)
-        pool.remove(candidate)
-        i += 7
-    for g in own:                      # week 1 fallback
-        if len(chosen) >= 3:
-            break
-        if g not in chosen:
-            chosen.append(g)
-    return tuple(chosen[:3])  # type: ignore[return-value]
+def _grammar_for_day(week: Week, dow: int, day: int) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return (all grammar cards, genuinely new cards).
 
+    A0-A2 introduces at most ONE new grammar point per lesson. Earlier points are
+    recycled as support. Review day introduces nothing new. B1 still uses one new
+    focus plus spaced review, avoiding the old three-new-rules-per-day overload.
+    """
+    _, level = STAGE_BY_WEEK[week.number]
+    own = list(week.grammar)
+    earlier = _earlier_grammar(week.number)
+
+    if dow == DAYS_PER_WEEK:
+        new_ids: list[str] = []
+        cards = own[:3] or earlier[-3:]
+    else:
+        focus_index = dow - 1
+        new_ids = [own[focus_index]] if focus_index < len(own) else []
+        cards = list(new_ids)
+        review_pool = [g for g in reversed(earlier + own[:focus_index]) if g not in cards]
+        max_cards = 2 if level == "A0" else 3
+        cards += review_pool[: max_cards - len(cards)]
+
+    # On the earliest A0 days there may be no older grammar yet. One card is valid.
+    return tuple(cards), tuple(new_ids)
+
+def _scaffolding(level: str) -> str:
+    return {
+        "A0": "true beginner: ultra-short sentences, repetition, English support, guided output",
+        "A1": "strong scaffolding: short sentences, models and controlled output",
+        "A2": "moderate scaffolding: everyday communication and short connected output",
+        "B1": "independent B1 work; authentic TELC difficulty in the final four weeks",
+    }[level]
+
+def _speaking_mode(week: int, dow: int) -> tuple[int, str]:
+    if week <= 4:
+        return 1, "guided survival speaking"
+    if week <= 9:
+        return 1, "guided personal description"
+    if week <= 17:
+        return (1 if dow in (1, 4) else 2), "supported experiences and short talk"
+    return SPEAKING_PARTS[(dow - 1) % 6] if dow != 7 else 2, "TELC speaking practice"
 
 def get_plan_day(day: int) -> PlanDay:
-    """Return the plan for lesson `day` (1..273). Days beyond the plan repeat the final week."""
-    if day < 1:
-        raise ValueError("day must be >= 1")
-    capped = min(day, TOTAL_DAYS)
-    week = WEEKS[(capped - 1) // DAYS_PER_WEEK]
-    dow = (capped - 1) % DAYS_PER_WEEK + 1
+    """Return the deterministic plan for lesson day 1..273."""
+    if not 1 <= day <= TOTAL_DAYS:
+        raise ValueError(f"day must be between 1 and {TOTAL_DAYS}")
+    week = WEEKS[(day - 1) // DAYS_PER_WEEK]
+    dow = (day - 1) % DAYS_PER_WEEK + 1
     is_review = dow == DAYS_PER_WEEK
-    idx = dow - 1
+    idx = min(dow - 1, 5)
+    phase, level = STAGE_BY_WEEK[week.number]
+    grammar_ids, new_grammar_ids = _grammar_for_day(week, dow, day)
+    speaking_part, speaking_mode = _speaking_mode(week.number, dow)
     return PlanDay(
-        day=day,
-        week=week.number,
-        day_of_week=dow,
-        month=week.month,
-        phase=week.phase,
-        level=week.level,
-        theme_en=week.theme_en,
-        theme_pl=week.theme_pl,
+        day=day, week=week.number, day_of_week=dow, month=week.month,
+        phase=phase, level=level, theme_en=week.theme_en, theme_pl=week.theme_pl,
         situation=f"weekly review: {week.theme_en}" if is_review else week.situations[idx],
-        lesson_type="review" if is_review else "lesson",
-        grammar_ids=_grammar_for_day(week, dow, day),
+        lesson_type="review" if is_review else "lesson", grammar_ids=grammar_ids,
+        new_grammar_ids=new_grammar_ids, target_words=VOCAB_TARGET[level],
+        scaffolding=_scaffolding(level), speaking_mode=speaking_mode,
         text_type="e-mail with a reply" if is_review else TEXT_TYPES[idx],
         listening_type=LISTENING_TYPES[1] if is_review else LISTENING_TYPES[idx],
-        speaking_part=2 if is_review else SPEAKING_PARTS[idx],
-        writing_focus=week.writing_focus,
-        reading_length=READING_LENGTH[week.level],
-        listening_length=LISTENING_LENGTH[week.level],
-        writing_length=WRITING_LENGTH[week.level],
+        speaking_part=speaking_part,
+        writing_focus=(
+            "guided personal sentences" if level == "A0" else
+            "short informal message" if level == "A1" else
+            "informal or semi-formal e-mail" if level == "A2" else week.writing_focus
+        ),
+        reading_length=READING_LENGTH[level], listening_length=LISTENING_LENGTH[level],
+        writing_length=WRITING_LENGTH[level],
     )
-
 
 def plan_markdown() -> str:
     """The whole plan as Markdown (used for PLAN.md and the in-app download)."""
@@ -412,8 +445,8 @@ def plan_markdown() -> str:
     ]
     for w in WEEKS:
         grammar = "; ".join(GRAMMAR[g][0] for g in w.grammar)
-        lines.append(f"| {w.month} | {w.number} | {w.phase} | {w.level} | "
-                     f"{w.theme_en} ({w.theme_pl}) | {grammar} | {w.writing_focus} |")
+        lines.append(f"| {w.month} | {w.number} | {STAGE_BY_WEEK[w.number][0]} | {STAGE_BY_WEEK[w.number][1]} | "
+                     f"{w.theme_en} ({w.theme_pl}) | {grammar} | {get_plan_day((w.number-1)*7+1).writing_focus} |")
     lines += ["", "## Daily situations", ""]
     for w in WEEKS:
         lines.append(f"**Week {w.number}: {w.theme_en}**: " + "; ".join(w.situations))

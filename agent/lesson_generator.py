@@ -52,8 +52,8 @@ def validate_core(core: CoreLesson, plan: PlanDay, known_words: list[str], week_
     p: list[str] = []
 
     # Vocabulary
-    if len(core.new_vocabulary) != NEW_WORDS_PER_LESSON:
-        p.append(f"new_vocabulary has {len(core.new_vocabulary)} items; exactly {NEW_WORDS_PER_LESSON} required.")
+    if len(core.new_vocabulary) != plan.target_words:
+        p.append(f"new_vocabulary has {len(core.new_vocabulary)} items; exactly {plan.target_words} required for {plan.level}.")
     known = {normalize(w) for w in known_words}
     week = {normalize(w) for w in week_words}
     seen: set[str] = set()
@@ -74,8 +74,9 @@ def validate_core(core: CoreLesson, plan: PlanDay, known_words: list[str], week_
     if ids != list(plan.grammar_ids):
         p.append(f"grammar_rules ids must be exactly {list(plan.grammar_ids)} in this order (got {ids}).")
     for g in core.grammar_rules:
-        if len(g.examples) < 3:
-            p.append(f"Grammar '{g.id}' needs at least 3 examples.")
+        minimum_examples = 2 if plan.level == "A0" else 3
+        if len(g.examples) < minimum_examples:
+            p.append(f"Grammar '{g.id}' needs at least {minimum_examples} examples.")
         if not g.story_examples:
             p.append(f"Grammar '{g.id}' needs story_examples.")
 
@@ -113,8 +114,8 @@ def validate_practice(pr: Practice, plan: PlanDay) -> list[str]:
             p.append(f"exercises: {actual} '{section}' items; {expected} required.")
     for gid in plan.grammar_ids:
         n = sum(1 for e in pr.exercises if e.section == "grammar" and e.grammar_id == gid)
-        if n < GRAMMAR_EXERCISES_PER_RULE:
-            p.append(f"Grammar point {gid} needs {GRAMMAR_EXERCISES_PER_RULE} exercises (has {n}).")
+        if n < 1:
+            p.append(f"Grammar point {gid} needs at least 1 exercise (has {n}).")
     for e in pr.exercises:
         if e.type == "choice":
             p += _check_choice(f"Exercise {e.id}", e.options, e.correct_option, (2, 3, 4))
@@ -196,14 +197,15 @@ def _generate(messages: list[dict], model: type[T],
 
 def build_core_messages(plan: PlanDay, known_words: list[str], week_words: list[str]) -> list[dict]:
     grammar_list = "\n".join(f'    {gid}: "{GRAMMAR[gid][0]}" (e.g. {GRAMMAR[gid][1]})' for gid in plan.grammar_ids)
-    vocab_rule = (fill(VOCAB_REVIEW, n=NEW_WORDS_PER_LESSON, week_words=", ".join(week_words))
-                  if plan.lesson_type == "review" else fill(VOCAB_NEW, n=NEW_WORDS_PER_LESSON))
+    vocab_rule = (fill(VOCAB_REVIEW, n=plan.target_words, week_words=", ".join(week_words))
+                  if plan.lesson_type == "review" else fill(VOCAB_NEW, n=plan.target_words))
     system = fill(
         CORE_SYSTEM, text_type=plan.text_type, reading_min=plan.reading_length[0],
-        reading_max=plan.reading_length[1], level=plan.level, n_words=NEW_WORDS_PER_LESSON,
+        reading_max=plan.reading_length[1], level=plan.level, n_words=plan.target_words,
         vocab_rule=vocab_rule, grammar_list=grammar_list, listening_min=plan.listening_length[0],
         listening_max=plan.listening_length[1], listening_type=plan.listening_type,
-        n_listening=LISTENING_TASKS,
+        n_listening=LISTENING_TASKS, scaffolding=plan.scaffolding,
+        new_grammar_ids=", ".join(plan.new_grammar_ids) or "none (review only)",
     )
     user = fill(
         CORE_USER, day=plan.day, week=plan.week, phase=plan.phase, level=plan.level,
@@ -217,10 +219,10 @@ def build_practice_messages(plan: PlanDay, core: CoreLesson) -> list[dict]:
     system = fill(
         PRACTICE_SYSTEM, speaking_part=plan.speaking_part,
         n_ex_total=sum(EXERCISE_COMPOSITION.values()), n_ex_vocab=EXERCISE_COMPOSITION["vocabulary"],
-        n_ex_grammar=EXERCISE_COMPOSITION["grammar"], per_rule=GRAMMAR_EXERCISES_PER_RULE,
+        n_ex_grammar=EXERCISE_COMPOSITION["grammar"], per_rule="distributed across the assigned grammar cards",
         n_ex_le=EXERCISE_COMPOSITION["language_elements"], writing_focus=plan.writing_focus,
         level=plan.level, writing_min=plan.writing_length[0], writing_max=plan.writing_length[1],
-        speaking_part_name=SPEAKING_PART_NAMES[plan.speaking_part],
+        speaking_part_name=SPEAKING_PART_NAMES[plan.speaking_part], speaking_mode=plan.speaking_mode, scaffolding=plan.scaffolding,
         n_quiz=sum(QUIZ_COMPOSITION.values()), n_mc=QUIZ_COMPOSITION["multiple_choice"],
         n_fill=QUIZ_COMPOSITION["fill_blank"], n_open=QUIZ_COMPOSITION["open"],
     )

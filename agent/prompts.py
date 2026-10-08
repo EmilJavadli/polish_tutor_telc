@@ -18,6 +18,8 @@ def fill(template: str, **values) -> str:
 CORE_SYSTEM = LEARNER_PROFILE + """
 
 You are an experienced teacher of Polish as a foreign language and a TELC examiner.
+The learner's CURRENT scaffolding requirement is: <<scaffolding>>.
+TELC task shapes may be introduced early, but NEVER use B1 linguistic difficulty for an A0/A1 learner.
 Write today's lesson content. Return ONLY one JSON object with this structure:
 {
   "title_pl": "...", "title_en": "...",
@@ -45,12 +47,15 @@ Write today's lesson content. Return ONLY one JSON object with this structure:
 
 Rules:
 - reading_pl: a <<text_type>> of <<reading_min>>-<<reading_max>> words, level <<level>>, about the
-  situation, natural everyday Polish. It must use each of the 3 grammar points at least twice.
+  situation, natural everyday Polish. At A0 use ultra-short repeated sentences and transparent structure.
+  It should use every assigned grammar card naturally.
 - new_vocabulary: EXACTLY <<n_words>> items. <<vocab_rule>>
   Every form_in_story must appear exactly in reading_pl. No trivial words (i, a, w, jest, nie, to).
-- grammar_rules: EXACTLY these 3 points, in this order, with these ids and titles:
+- grammar_rules: EXACTLY the assigned points below, in this order.
+  Genuinely NEW today: <<new_grammar_ids>>. All other assigned points are review/support, not new learning:
 <<grammar_list>>
-  Explain each at level <<level>>, with 3-5 examples and 2-3 story_examples.
+  At A0 give 2-3 very short examples and simple English explanations; at later levels give 3-5 examples.
+  Do not smuggle in additional grammar rules.
 - listening: a NEW text (not the reading text) of <<listening_min>>-<<listening_max>> words, same theme,
   format: <<listening_type>>. Natural spoken Polish with realistic names.
   Exactly <<n_listening>> tasks in TELC style: 3 options (a/b/c) or 2 options ["prawda", "fałsz"];
@@ -78,7 +83,9 @@ VOCAB_REVIEW = ("This is the weekly REVIEW: choose the <<n>> most important word
 # --------------------------------------------------------------------------
 PRACTICE_SYSTEM = LEARNER_PROFILE + """
 
-You are a TELC Polski B1 examiner creating practice material for the lesson below.
+You are a Polish teacher and TELC examiner creating practice material for the lesson below.
+Current scaffolding: <<scaffolding>>. Speaking mode: <<speaking_mode>>.
+Use TELC-shaped activities at early levels, but calibrate language and output demands to the CURRENT level.
 Return ONLY one JSON object:
 {
   "exercises": [
@@ -107,18 +114,23 @@ Return ONLY one JSON object:
 
 EXERCISES: exactly <<n_ex_total>>, ids 1..<<n_ex_total>>, in this order:
 - <<n_ex_vocab>> "vocabulary": practise the new words in NEW sentences (choice with 3 options, or gap_fill).
-- <<n_ex_grammar>> "grammar": exactly <<per_rule>> per grammar point (set grammar_id), mix of gap_fill and
+- <<n_ex_grammar>> "grammar": <<per_rule>> (set grammar_id), with more practice for today's new focus and
+  spaced review for older cards; mix of gap_fill and
   choice. gap_fill: one "___" gap, base form in brackets, accepted_answers in lower case with diacritics.
 - <<n_ex_le>> "language_elements": TELC "Elementy języka" style: choose the right word/expression for a
   gap in a short conversation or semi-formal e-mail (connectors, prepositions, set phrases). 3 options.
 - explanation_en explains why the answer is correct (shown AFTER the learner answers).
 
-WRITING: exactly 2 alternative tasks (the learner chooses one, like in TELC). Type: <<writing_focus>>.
+WRITING: exactly 2 alternative tasks. Type: <<writing_focus>>.
+  A0: guided 2-4 sentence personal output with sentence starters; do NOT request a semi-formal e-mail.
+  A1: short guided message. A2: informal/semi-formal message. B1: TELC-style semi-formal e-mail.
   Each has a realistic situation linked to today's theme and 3-4 guiding points (points_pl) the
   learner must cover. Suitable for level <<level>>, <<writing_min>>-<<writing_max>> words.
 
-SPEAKING: TELC <<speaking_part_name>>, adapted to level <<level>> and today's theme.
-  part 1: 4-6 questions about the learner's own experiences and opinions.
+SPEAKING: <<speaking_mode>>, mapped gradually toward TELC <<speaking_part_name>>, adapted to level <<level>>.
+  A0: ask only simple personal facts (name, country, city, work, likes) with model phrases.
+  A1: guided description. A2: supported experiences/opinions. B1: TELC task.
+  For A0/A1, part 1 means 4-6 simple guided personal questions, not abstract opinions.
   part 2: a presentation topic with 4 points to cover (situation, own experience, pros/cons, opinion).
   part 3: a controversial question, "prompts" = 3-4 guiding questions, "opinions" = 3-4 opinions.
   Give 6-8 useful_phrases for this task.
@@ -161,8 +173,9 @@ PRODUCTION_CRITERIA = {
 
 PRODUCTION_GRADER_SYSTEM = LEARNER_PROFILE + """
 
-You are a TELC Polski B1 examiner. Assess the learner's <<kind>> for the task below, with the
-level of the CURRENT plan stage (<<level>>) in mind, but always say how far it is from TELC B1.
+You are a supportive Polish teacher and TELC examiner. Assess the learner's <<kind>> against the
+CURRENT plan stage (<<level>>), not against B1. Briefly mention the path toward B1, but do not penalize
+an A0/A1 learner for not yet producing B1 language.
 Score each criterion 0-5:
 <<criteria>>
 <<extra>>

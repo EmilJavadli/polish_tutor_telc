@@ -17,12 +17,12 @@ def make_core(day: int = 1, words=None) -> CoreLesson:
     reading = (sentence * 20).split()
     reading = " ".join(reading[: (lo + hi) // 2])
     lines = [DialogueLine(speaker="Anna" if i % 2 else "Piotr", text="Dzień dobry, jak się pan ma dzisiaj rano?")
-             for i in range(12)]
+             for i in range(6)]
     return CoreLesson(
         title_pl="Nowa sąsiadka", title_en="The new neighbour",
         reading_pl=reading, reading_en="translation",
         new_vocabulary=[{"polish": w, "form_in_story": w, "english": "x", "example_pl": "x", "example_en": "x"}
-                        for w in words[:15]],
+                        for w in words[:plan.target_words]],
         grammar_rules=[GrammarRule(id=g, title=t, explanation="Explained.",
                                    examples=[Example(polish="a", english="a")] * 3, story_examples=["x"])
                        for g, t in zip(plan.grammar_ids, plan.grammar_titles)],
@@ -38,11 +38,11 @@ def make_practice(day: int = 1) -> Practice:
     ex = [Exercise(id=i, section="vocabulary", type="choice", prompt="Wybierz", options=["a", "b", "c"],
                    correct_option=0) for i in range(1, 6)]
     i = 6
-    for gid in plan.grammar_ids:
-        for _ in range(3):
-            ex.append(Exercise(id=i, section="grammar", type="gap_fill", grammar_id=gid,
-                               prompt="Piję ___ (kawa).", accepted_answers=["kawę"]))
-            i += 1
+    for n in range(9):
+        gid = plan.grammar_ids[n % len(plan.grammar_ids)]
+        ex.append(Exercise(id=i, section="grammar", type="gap_fill", grammar_id=gid,
+                           prompt="Piję ___ (kawa).", accepted_answers=["kawę"]))
+        i += 1
     ex += [Exercise(id=j, section="language_elements", type="choice", prompt="___", options=["a", "b", "c"],
                     correct_option=2) for j in range(15, 20)]
     quiz = ([QuizQuestion(id=k, type="multiple_choice", question=f"P{k}?", options=["a", "b", "c", "d"],
