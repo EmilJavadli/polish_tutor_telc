@@ -3,3 +3,7 @@ openai>=1.60
 elevenlabs>=1.0
 pydantic>=2.6
 Authlib>=1.3.2
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+alembic>=1.13
+supabase>=2.0
