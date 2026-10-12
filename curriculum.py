@@ -420,23 +420,97 @@ def plan_markdown() -> str:
         lines.append("")
     return "\n".join(lines)
 
+# ---------------------------------------------------------------------------
+# Placement-to-curriculum personalization
+# ---------------------------------------------------------------------------
+PLACEMENT_LEVEL_VALUE = {"A0": 0, "A1": 1, "A2": 2, "B1": 3}
 
-# Placement helpers ---------------------------------------------------------
-PLACEMENT_START_DAY = {"A0": 1, "A1": 22, "A2": 57, "B1": 120}
 
-def placement_start_day(level: str) -> int:
-    """Map an overall CEFR placement estimate to the first suitable plan day."""
-    return PLACEMENT_START_DAY.get(level, 1)
+def _skill_cefr_levels(skill_profiles: dict) -> dict[str, str]:
+    """Extract CEFR labels from new nested profiles and older numeric profiles."""
+    levels: dict[str, str] = {}
+    for skill, profile in (skill_profiles or {}).items():
+        if isinstance(profile, dict):
+            level = str(profile.get("level", "A0"))
+        elif isinstance(profile, (int, float)):
+            score = float(profile)
+            level = "B1" if score >= 70 else "A2" if score >= 50 else "A1" if score >= 25 else "A0"
+        else:
+            level = "A0"
+        levels[skill] = level if level in PLACEMENT_LEVEL_VALUE else "A0"
+    return levels
 
-def placement_emphasis(skill_levels: dict[str, str]) -> dict:
-    """Translate a CEFR skill profile into future-plan emphasis flags."""
-    order = {"A0": 0, "A1": 1, "A2": 2, "B1": 3}
-    values = {skill: order.get(level, 0) for skill, level in skill_levels.items()}
-    weakest = min(values.values()) if values else 0
+
+def recommend_start_position(
+    overall_level: str,
+    skill_profiles: dict,
+    confidence: float | None = None,
+) -> dict:
+    """Recommend a curriculum day from the full CEFR skill profile.
+
+    The recommendation is intentionally conservative. It uses bridge/review weeks
+    when productive or listening evidence is below the overall level, and skips
+    forward only when several skills provide consistent higher-level evidence.
+    """
+    levels = _skill_cefr_levels(skill_profiles)
+    values = {skill: PLACEMENT_LEVEL_VALUE[level] for skill, level in levels.items()}
+    count = lambda minimum: sum(value >= minimum for value in values.values())
+    low = lambda skill, maximum: values.get(skill, 0) <= maximum
+    confidence = 0.5 if confidence is None else max(0.0, min(1.0, float(confidence)))
+    reasons: list[str] = []
+
+    if overall_level == "A0":
+        day = 1
+        reasons.append("A0 evidence requires the complete beginner foundation.")
+
+    elif overall_level == "A1":
+        if low("speaking", 0) or low("listening", 0) or low("writing", 0):
+            day = 8
+            reasons.append("A0 evidence in a productive or listening skill requires an early A1 bridge.")
+        elif count(2) >= 2 and count(1) >= 4 and confidence >= 0.65:
+            day = 29
+            reasons.append("Stable A1 foundation with some A2 evidence supports starting in the second half of A1.")
+        else:
+            day = 22
+            reasons.append("A1 evidence supports skipping the first three beginner weeks while retaining core review.")
+
+    elif overall_level == "A2":
+        if low("speaking", 1) or low("writing", 1) or low("listening", 1):
+            day = 50
+            reasons.append("A1 evidence in listening or production calls for the final A1 bridge week before A2.")
+        elif count(2) >= 4 and count(3) >= 1 and confidence >= 0.70:
+            day = 85
+            reasons.append("Broad A2 evidence plus a B1-strength skill supports a later A2 starting point.")
+        else:
+            day = 57
+            reasons.append("Consistent A2 evidence supports starting at the A2 curriculum boundary.")
+
+    elif overall_level == "B1":
+        if count(3) == 5 and confidence >= 0.80:
+            day = 246
+            reasons.append("B1 evidence in all five skills supports direct TELC exam preparation.")
+        elif count(3) >= 3 and min(values.values(), default=0) >= 2 and confidence >= 0.70:
+            day = 211
+            reasons.append("Broad B1 evidence with no skill below A2 supports B1 consolidation.")
+        else:
+            day = 120
+            reasons.append("Developing B1 evidence supports the full B1-building stage.")
+    else:
+        day = 1
+        reasons.append("Unknown placement level; using the safest starting point.")
+
+    weakest_value = min(values.values(), default=0)
+    priority_skills = [skill for skill, value in values.items() if value == weakest_value]
+    if priority_skills:
+        reasons.append("Priority skills: " + ", ".join(skill.replace("_", " ") for skill in priority_skills) + ".")
+
+    plan = get_plan_day(day)
     return {
-        "priority_skills": [skill for skill, value in values.items() if value == weakest],
-        "extra_listening": values.get("listening", 0) < 2,
-        "extra_speaking": values.get("speaking", 0) < 2,
-        "extra_writing": values.get("writing", 0) < 2,
-        "extra_grammar": values.get("grammar_vocab", 0) < 2,
+        "day": day,
+        "week": plan.week,
+        "phase": plan.phase,
+        "curriculum_level": plan.level,
+        "skill_levels": levels,
+        "priority_skills": priority_skills,
+        "reasons": reasons,
     }

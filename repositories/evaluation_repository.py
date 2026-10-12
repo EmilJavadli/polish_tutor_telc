@@ -3,9 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select, update
 from config import PLACEMENT_VERSION
 from database.models import PlacementEvaluation, StudyPlan, UserProfile
-from placement.test_bank import PLACEMENT_BANK_VERSION
-
-CURRENT_VERSION = f"{PLACEMENT_VERSION}-{PLACEMENT_BANK_VERSION}"
+from curriculum import recommend_start_position
 
 class EvaluationRepository:
     def __init__(self, session_factory, user_id):
@@ -17,7 +15,6 @@ class EvaluationRepository:
             return session.scalar(select(PlacementEvaluation).where(
                 PlacementEvaluation.user_id == self.user_id,
                 PlacementEvaluation.status == "in_progress",
-                PlacementEvaluation.version == CURRENT_VERSION,
             ).order_by(PlacementEvaluation.started_at.desc()))
 
     def pending_review(self):
@@ -41,7 +38,7 @@ class EvaluationRepository:
         with self.session_factory() as session:
             evaluation = PlacementEvaluation(
                 user_id=self.user_id,
-                version=CURRENT_VERSION,
+                version=PLACEMENT_VERSION,
                 status="in_progress",
                 current_section="grammar_vocab",
                 responses={"_mode": mode},
@@ -89,8 +86,14 @@ class EvaluationRepository:
             profile = session.get(UserProfile, self.user_id)
             if profile is None:
                 raise RuntimeError("User profile was not found.")
-            generic_start = self._start_day_for_level(evaluation.assigned_level)
-            start_day = max(profile.current_plan_position or 1, generic_start)
+            recommendation = recommend_start_position(
+                evaluation.assigned_level or "A0",
+                dict(evaluation.scores or {}),
+                evaluation.confidence,
+            )
+            recommended_start = recommendation["day"]
+            # Never move a returning learner backwards or delete completed work.
+            start_day = max(profile.current_plan_position or 1, recommended_start)
             session.execute(update(StudyPlan).where(
                 StudyPlan.user_id == self.user_id,
                 StudyPlan.status == "active",
@@ -111,6 +114,9 @@ class EvaluationRepository:
                     "placement_confidence": evaluation.confidence,
                     "placement_version": evaluation.version,
                     "personalization": self._personalization_rules(scores),
+                    "start_recommendation": recommendation,
+                    "recommended_start_day": recommended_start,
+                    "effective_start_day": start_day,
                 },
             )
             session.add(plan)
@@ -142,7 +148,6 @@ class EvaluationRepository:
             evaluation = session.scalar(select(PlacementEvaluation).where(
                 PlacementEvaluation.user_id == self.user_id,
                 PlacementEvaluation.status == "in_progress",
-                PlacementEvaluation.version == CURRENT_VERSION,
             ).order_by(PlacementEvaluation.started_at.desc()))
             if evaluation is not None:
                 evaluation.status = "abandoned"
@@ -150,26 +155,15 @@ class EvaluationRepository:
 
     @staticmethod
     def _start_day_for_level(level):
-        return {"A0": 1, "A1": 22, "A2": 57, "B1": 120}.get(level or "A0", 1)
+        return {"A0": 1, "A1": 29, "A2": 64, "B1": 120}.get(level or "A0", 1)
 
     @staticmethod
     def _personalization_rules(scores):
-        """Create plan emphasis from nested CEFR skill profiles."""
-        order = {"A0": 0, "A1": 1, "A2": 2, "B1": 3}
-        levels = {
-            skill: (profile.get("level", "A0") if isinstance(profile, dict) else "A0")
-            for skill, profile in scores.items()
-        }
-        values = {skill: order.get(level, 0) for skill, level in levels.items()}
-        weakest = min(values.values()) if values else 0
-        strongest = max(values.values()) if values else 0
         return {
-            "skill_levels": levels,
-            "priority_skills": [k for k, v in values.items() if v == weakest or v <= 1],
-            "maintenance_skills": [k for k, v in values.items() if v == strongest and v >= 2],
-            "extra_listening": values.get("listening", 0) < 2,
-            "extra_speaking": values.get("speaking", 0) < 2,
-            "extra_writing": values.get("writing", 0) < 2,
-            "extra_grammar": values.get("grammar_vocab", 0) < 2,
-            "assessment_model": "CEFR evidence profile v2",
+            "priority_skills": [k for k, v in scores.items() if v < 45],
+            "maintenance_skills": [k for k, v in scores.items() if v >= 65],
+            "extra_listening": scores.get("listening", 100) < 45,
+            "extra_speaking": scores.get("speaking", 100) < 45,
+            "extra_writing": scores.get("writing", 100) < 45,
+            "extra_grammar": scores.get("grammar_vocab", 100) < 45,
         }

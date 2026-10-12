@@ -94,12 +94,19 @@ if not profile.evaluation_completed or retaking_placement:
 repo = LessonRepository(session_factory, current_user.id, DATA_DIR / "audio")
 today = dt.date.today()
 if result := st.session_state.pop("placement_result", None):
-    st.success(f"Placement complete: **{result['level']}** · your personalized plan is ready.")
-    if result.get("skill_levels"):
-        st.caption(" · ".join(
-            f"{skill.replace('_', ' ').title()}: {level}"
-            for skill, level in result["skill_levels"].items()
-        ))
+    recommendation = result.get("start_recommendation", {})
+    start_text = (
+        f" · recommended start: day {recommendation.get('day')} "
+        f"(week {recommendation.get('week')})"
+        if recommendation else ""
+    )
+    st.success(
+        f"Placement complete: **{result['level']}**{start_text} · your personalized plan is ready."
+    )
+    if recommendation.get("reasons"):
+        with st.expander("Why this starting point?"):
+            for reason in recommendation["reasons"]:
+                st.write(f"- {reason}")
 
 
 # =========================================================================
@@ -652,11 +659,6 @@ with st.sidebar:
         st.markdown(
             f"Daily study time: **{profile.daily_study_minutes} minutes**"
         )
-        if profile.skill_profile:
-            st.markdown("**CEFR skill profile**")
-            for skill, evidence in profile.skill_profile.items():
-                level = evidence.get("level", "-") if isinstance(evidence, dict) else "legacy"
-                st.caption(f"{skill.replace('_', ' ').title()}: {level}")
 
         pending_retake = evaluation_repository.pending_review()
         unfinished_retake = evaluation_repository.current()
