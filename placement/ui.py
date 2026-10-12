@@ -1,11 +1,11 @@
 """Placement test UI with initial-placement and optional-retake modes."""
 import streamlit as st
-from polish_keyboard import render_polish_keyboard
 from placement.test_bank import GRAMMAR_VOCAB, READING, READING_TEXT, LISTENING, LISTENING_TEXT
 from placement.scoring import objective_score, classify
 from placement.grader import grade_productive
 from agent.tts import synthesize_speech
 from agent.llm import transcribe
+from curriculum import recommend_start_position
 
 
 def _choices(items, prefix):
@@ -57,10 +57,20 @@ def render_retake_result(repo, profile, evaluation):
     if evaluation.weaknesses:
         st.warning("Priority areas: " + ", ".join(labels.get(x, x) for x in evaluation.weaknesses))
 
+    recommendation = recommend_start_position(
+        new_level,
+        new_scores,
+        evaluation.confidence,
+    )
     st.info(
+        f"Recommended future starting point: **day {recommendation['day']}**, "
+        f"week {recommendation['week']} ({recommendation['phase']}). "
         "Updating the plan changes only future lessons. Completed lessons, attempts, "
         "vocabulary progress, grammar progress and older evaluations remain saved."
     )
+    with st.expander("Why this starting point?"):
+        for reason in recommendation["reasons"]:
+            st.write(f"- {reason}")
     update_col, keep_col = st.columns(2)
     with update_col:
         if st.button("Update my study plan", type="primary", width="stretch"):
@@ -135,12 +145,7 @@ def render(repo, profile, *, mode="initial"):
 
     elif section == "writing":
         st.write("Write about yourself, life in Poland, a normal week, and one past or future plan.")
-        writing_key = f"placement_writing_{evaluation.id}"
-        if writing_key not in st.session_state:
-            st.session_state[writing_key] = responses.get("writing", {}).get("text", "")
-        st.caption("🇵🇱 Click a Polish letter to add it to your answer:")
-        render_polish_keyboard(writing_key, keyboard_key=f"placement_writing_keyboard_{evaluation.id}")
-        text = st.text_area("Your Polish text", key=writing_key, height=220)
+        text = st.text_area("Your Polish text", height=220)
         if st.button("Save and continue", type="primary"):
             if not text.strip():
                 st.warning("Please write an answer before continuing.")
@@ -151,10 +156,7 @@ def render(repo, profile, *, mode="initial"):
     elif section == "speaking":
         st.write("Introduce yourself, describe a normal day, and mention one past experience or future plan.")
         recording = st.audio_input("Record your answer")
-        speaking_key = f"placement_speaking_{evaluation.id}"
-        st.caption("🇵🇱 Polish letters for a typed answer:")
-        render_polish_keyboard(speaking_key, keyboard_key=f"placement_speaking_keyboard_{evaluation.id}")
-        typed = st.text_area("Or type what you would say", key=speaking_key)
+        typed = st.text_area("Or type what you would say")
         if st.button("Complete evaluation", type="primary"):
             speech = transcribe(recording.getvalue()) if recording is not None else typed.strip()
             if not speech:
