@@ -74,25 +74,74 @@ def highlight_words(text: str, lesson: Lesson) -> str:
     return re.sub(pattern, r"**\1**", text, flags=re.IGNORECASE)
 
 
-def after_attempt(day: int) -> None:
-    """Re-check completion after any saved attempt."""
+def after_attempt(day: int) -> bool:
+    """Re-check completion and return True only when this action completes the lesson."""
     if not repo.is_completed(day) and repo.update_completion(day):
         st.session_state["just_completed"] = day
+        return True
+    return False
 
 
-def audio_block(day: int, kind: str, label: str, make_audio) -> None:
+def rerun_fragment_or_app(*, full_app: bool = False) -> None:
+    """Rerun only the active fragment when possible.
+
+    Full app reruns recreate the complete UI, re-resolve authentication and reload the
+    user profile/repository. Most lesson interactions only need their own fragment.
+    A full rerun is reserved for navigation or when lesson completion changes sidebar state.
+    """
+    if full_app:
+        st.rerun()
+    try:
+        st.rerun(scope="fragment")
+    except st.errors.StreamlitAPIException:
+        # Safe fallback when invoked during a full-app render rather than a fragment rerun.
+        st.rerun()
+
+
+def audio_block(
+    day: int,
+    kind: str,
+    label: str,
+    make_audio,
+) -> None:
     path = repo.audio_path(day, kind)
+
     if path.exists():
         st.audio(path.read_bytes(), format="audio/mpeg")
-    elif not tts_available():
-        st.caption("🔇 Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID to secrets.toml to enable audio.")
-    elif st.button(label, key=f"tts_{day}_{kind}"):
-        with st.spinner("Recording…"):
+        return
+
+    if not tts_available():
+        st.caption(
+            "🔇 Add ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID "
+            "to secrets.toml to enable audio."
+        )
+        return
+
+    button_key = f"tts_{day}_{kind}"
+    state_key = f"audio_{day}_{kind}"
+
+    # Audio generated during the current session.
+    if state_key in st.session_state:
+        st.audio(
+            st.session_state[state_key],
+            format="audio/mpeg",
+        )
+        return
+
+    if st.button(label, key=button_key):
+        with st.spinner("Creating recording…"):
             try:
-                path.write_bytes(make_audio())
-                st.rerun()
+                audio_bytes = make_audio()
+
+                path.write_bytes(audio_bytes)
+                st.session_state[state_key] = audio_bytes
+
+                # Display immediately in the same run.
+                st.audio(audio_bytes, format="audio/mpeg")
+                st.toast("Recording created", icon="🎧")
+
             except Exception as exc:
-                st.error(str(exc))
+                st.error(f"Audio generation failed: {exc}")
 
 
 def render_feedback(fb: ProductionFeedback, max_score: int = 20) -> None:
@@ -119,6 +168,7 @@ def correct_answer_text(item) -> str:
 # =========================================================================
 # sections
 # =========================================================================
+@st.fragment
 def render_reading(lesson: Lesson) -> None:
     st.caption(f"Text type: **{lesson.text_type}**, as in TELC *Rozumienie tekstu pisanego*. "
                "Read it twice: first for the general idea, then for details.")
@@ -140,7 +190,7 @@ def render_reading(lesson: Lesson) -> None:
             audio_block(lesson.day, "reading_normal", "Create normal audio",
                         lambda: synthesize_speech(lesson.reading_pl, "normal"))
 
-
+@st.fragment
 def render_listening(lesson: Lesson) -> None:
     lst = lesson.listening
     st.markdown(f"**{lst.type}**  \n{lst.situation_en}")
@@ -168,7 +218,7 @@ def render_listening(lesson: Lesson) -> None:
                 st.markdown(f"**{l.speaker}:** {l.text}")
         if st.button("🔁 Try again", key=f"listen_again_{lesson.day}"):
             st.session_state[retry_key] = True
-            st.rerun()
+            rerun_fragment_or_app()
         return
 
     with st.form(f"listen_form_{lesson.day}_{len(attempts)}"):
@@ -180,7 +230,7 @@ def render_listening(lesson: Lesson) -> None:
         if st.form_submit_button("Check answers", type="primary"):
             repo.add_attempt(lesson.day, "listening", grade_listening(lst.tasks, answers))
             st.session_state[retry_key] = False
-            st.rerun()
+            rerun_fragment_or_app()
 
 
 def render_words(lesson: Lesson) -> None:
@@ -209,7 +259,7 @@ def render_grammar(lesson: Lesson) -> None:
                 for s in g.story_examples:
                     st.markdown(f"- {s}")
 
-
+@st.fragment
 def render_exercises(lesson: Lesson) -> None:
     sections = {"vocabulary": "🔤 Vocabulary", "grammar": "📐 Grammar",
                 "language_elements": "🧩 Language elements (TELC *Elementy języka*)"}
@@ -232,7 +282,7 @@ def render_exercises(lesson: Lesson) -> None:
                     st.caption(e.explanation_en)
         if st.button("🔁 Do the exercises again", key=f"ex_again_{lesson.day}"):
             st.session_state[retry_key] = True
-            st.rerun()
+            rerun_fragment_or_app()
         return
 
     n = len(attempts)
@@ -253,10 +303,10 @@ def render_exercises(lesson: Lesson) -> None:
         if st.form_submit_button("Check answers", type="primary"):
             repo.add_attempt(lesson.day, "exercises", grade_exercises(lesson.exercises, answers))
             st.session_state[retry_key] = False
-            after_attempt(lesson.day)
-            st.rerun()
+            completed_now = after_attempt(lesson.day)
+            rerun_fragment_or_app(full_app=completed_now)
 
-
+@st.fragment
 def render_writing(lesson: Lesson) -> None:
     plan = get_plan_day(lesson.day)
     lo, hi = plan.writing_length
@@ -289,8 +339,8 @@ def render_writing(lesson: Lesson) -> None:
                     return
             repo.add_attempt(lesson.day, "writing", WritingAttempt(
                 task_index=idx, text=text, word_count=words, result=fb, timestamp=now_iso()))
-            after_attempt(lesson.day)
-            st.rerun()
+            completed_now = after_attempt(lesson.day)
+            rerun_fragment_or_app(full_app=completed_now)
 
     attempts = repo.attempts(lesson.day, "writing")
     if attempts:
@@ -299,7 +349,7 @@ def render_writing(lesson: Lesson) -> None:
         st.subheader(f"Feedback · attempt {len(attempts)}")
         render_feedback(last.result)
 
-
+@st.fragment
 def render_speaking(lesson: Lesson) -> None:
     s = lesson.speaking
     st.markdown(f"**TELC {SPEAKING_PART_NAMES.get(s.part, f'Part {s.part}')}**")
@@ -336,8 +386,8 @@ def render_speaking(lesson: Lesson) -> None:
         name = repo.save_recording(lesson.day, audio)
         repo.add_attempt(lesson.day, "speaking", SpeakingAttempt(
             transcript=transcript, audio_file=name, result=fb, timestamp=now_iso()))
-        after_attempt(lesson.day)
-        st.rerun()
+        completed_now = after_attempt(lesson.day)
+        rerun_fragment_or_app(full_app=completed_now)
 
     with st.expander("⌨️ No microphone? Type what you would say"):
         typed = st.text_area("Your answer", key=f"typed_{lesson.day}_{n}")
@@ -353,8 +403,8 @@ def render_speaking(lesson: Lesson) -> None:
                         return
                 repo.add_attempt(lesson.day, "speaking", SpeakingAttempt(
                     transcript=typed, typed=True, result=fb, timestamp=now_iso()))
-                after_attempt(lesson.day)
-                st.rerun()
+                completed_now = after_attempt(lesson.day)
+                rerun_fragment_or_app(full_app=completed_now)
 
     attempts = repo.attempts(lesson.day, "speaking")
     if attempts:
@@ -366,7 +416,7 @@ def render_speaking(lesson: Lesson) -> None:
         st.markdown("**Transcript:** " + last.transcript)
         render_feedback(last.result)
 
-
+@st.fragment
 def render_quiz(lesson: Lesson) -> None:
     attempts = repo.attempts(lesson.day, "quiz")
     passed = next((a for a in attempts if a.passed), None)
@@ -431,35 +481,87 @@ def render_quiz(lesson: Lesson) -> None:
                 st.error(f"Grading failed, please submit again: {exc}")
                 return
         repo.add_attempt(lesson.day, "quiz", result)
-        after_attempt(lesson.day)
-        st.rerun()
+        completed_now = after_attempt(lesson.day)
+        rerun_fragment_or_app(full_app=completed_now)
 
-
+@st.fragment
 def render_chat(lesson: Lesson) -> None:
     st.subheader("💬 Ask your tutor")
-    key = f"chat_{lesson.day}"
-    history: list[dict] = st.session_state.setdefault(key, [])
-    box = st.container(height=560)
-    with box:
+
+    history_key = f"chat_{lesson.day}"
+    persisted = repo.get_progress(lesson.day)
+
+    if history_key not in st.session_state:
+        st.session_state[history_key] = persisted.get(
+            "chat_history",
+            [],
+        )
+
+    history: list[dict] = st.session_state[history_key]
+
+    chat_area = st.container(
+        height=560,
+        border=True,
+    )
+
+    with chat_area:
         if not history:
-            st.caption("Examples: *What does „zamówić” mean?* · *Why „kawę” and not „kawa”?* · "
-                       "*Is my sentence correct: …?*")
-        for msg in history:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-    question = st.chat_input("Ask about a word, phrase or grammar…")
-    if question:
-        history.append({"role": "user", "content": question})
-        with box:
-            with st.chat_message("user"):
-                st.markdown(question)
-            with st.chat_message("assistant"):
-                try:
-                    answer = st.write_stream(stream_tutor_reply(lesson, history))
-                except Exception as exc:
-                    answer = f"⚠️ Sorry, something went wrong: {exc}"
-                    st.error(answer)
-        history.append({"role": "assistant", "content": answer})
+            st.caption(
+                "Ask about vocabulary, grammar, pronunciation, "
+                "or sentences from today's lesson."
+            )
+
+        for message in history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+    question = st.chat_input(
+        "Ask about a word, phrase, or grammar…",
+        key=f"chat_input_{lesson.day}",
+    )
+
+    if not question:
+        return
+
+    user_message = {
+        "role": "user",
+        "content": question,
+    }
+    history.append(user_message)
+
+    with chat_area:
+        with st.chat_message("user"):
+            st.markdown(question)
+
+        with st.chat_message("assistant"):
+            try:
+                answer = st.write_stream(
+                    stream_tutor_reply(
+                        lesson,
+                        history,
+                    )
+                )
+            except Exception as exc:
+                answer = (
+                    "Sorry, the tutor could not answer. "
+                    f"Technical details: {exc}"
+                )
+                st.error(answer)
+
+    history.append(
+        {
+            "role": "assistant",
+            "content": answer,
+        }
+    )
+
+    repo.save_progress(
+        lesson.day,
+        {
+            **persisted,
+            "chat_history": history,
+        },
+    )
 
 
 def render_plan_page() -> None:
@@ -605,7 +707,7 @@ lesson_col, chat_col = st.columns([3, 2], gap="large")
 with lesson_col:
     tabs = st.tabs([
         f"📖 Reading · {TIME_PLAN['Reading']}′", f"🎧 Listening · {TIME_PLAN['Listening']}′",
-        f"🔤 Words · {TIME_PLAN['Words']}′", f"📐 Grammar · {TIME_PLAN['Grammar']}′",
+        f"🔤 Vocabulary · {TIME_PLAN['Words']}′", f"📐 Grammar · {TIME_PLAN['Grammar']}′",
         f"✏️ Exercises · {TIME_PLAN['Exercises']}′", f"📝 Writing · {TIME_PLAN['Writing']}′",
         f"🗣️ Speaking · {TIME_PLAN['Speaking']}′", f"✅ Quiz · {TIME_PLAN['Quiz']}′",
     ])
