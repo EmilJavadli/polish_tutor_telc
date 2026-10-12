@@ -6,6 +6,7 @@ import datetime as dt
 import re
 
 import streamlit as st
+from polish_keyboard import render_polish_keyboard
 
 from agent.graders import (
     grade_exercises, grade_listening, grade_quiz, grade_speaking, grade_writing,
@@ -94,19 +95,7 @@ if not profile.evaluation_completed or retaking_placement:
 repo = LessonRepository(session_factory, current_user.id, DATA_DIR / "audio")
 today = dt.date.today()
 if result := st.session_state.pop("placement_result", None):
-    recommendation = result.get("start_recommendation", {})
-    start_text = (
-        f" · recommended start: day {recommendation.get('day')} "
-        f"(week {recommendation.get('week')})"
-        if recommendation else ""
-    )
-    st.success(
-        f"Placement complete: **{result['level']}**{start_text} · your personalized plan is ready."
-    )
-    if recommendation.get("reasons"):
-        with st.expander("Why this starting point?"):
-            for reason in recommendation["reasons"]:
-                st.write(f"- {reason}")
+    st.success(f"Placement complete: **{result['level']}** · overall {result['overall']:.0f}% · your personalized plan is ready.")
 
 
 # =========================================================================
@@ -370,8 +359,13 @@ def render_writing(lesson: Lesson) -> None:
     st.markdown("\n".join(f"- {p}" for p in task.points_pl))
 
     saved_progress = repo.get_progress(lesson.day)
+    writing_key = f"w_text_{lesson.day}"
+    if writing_key not in st.session_state:
+        st.session_state[writing_key] = saved_progress.get("writing_draft", "")
+    st.caption("🇵🇱 Click a Polish letter to add it to your writing:")
+    render_polish_keyboard(writing_key, keyboard_key=f"writing_keyboard_{lesson.day}")
     with st.form(f"w_form_{lesson.day}"):
-        text = st.text_area("Your text", value=saved_progress.get("writing_draft", ""), height=220, key=f"w_text_{lesson.day}",
+        text = st.text_area("Your text", height=220, key=writing_key,
                             placeholder="Napisz tekst po polsku…")
         submitted = st.form_submit_button("Submit for feedback", type="primary")
     words = len(text.split())
@@ -412,8 +406,13 @@ def render_speaking(lesson: Lesson) -> None:
     with st.expander("💬 Useful phrases"):
         st.table([{"Polish": p.polish, "English": p.english} for p in s.useful_phrases])
     progress_state = repo.get_progress(lesson.day)
+    notes_key = f"notes_{lesson.day}"
+    if notes_key not in st.session_state:
+        st.session_state[notes_key] = progress_state.get("speaking_notes", "")
+    st.caption("🇵🇱 Polish letters for your notes:")
+    render_polish_keyboard(notes_key, keyboard_key=f"notes_keyboard_{lesson.day}")
     notes = st.text_area("Preparation notes (keywords only; in TELC, reading a script lowers your score)",
-                 value=progress_state.get("speaking_notes", ""), key=f"notes_{lesson.day}", height=80)
+                 key=notes_key, height=80)
     if st.button("Save notes", key=f"save_notes_{lesson.day}"):
         repo.save_progress(lesson.day, {**progress_state, "speaking_notes": notes})
         st.caption("Notes saved.")
@@ -440,7 +439,10 @@ def render_speaking(lesson: Lesson) -> None:
         rerun_fragment_or_app(full_app=completed_now)
 
     with st.expander("⌨️ No microphone? Type what you would say"):
-        typed = st.text_area("Your answer", key=f"typed_{lesson.day}_{n}")
+        typed_key = f"typed_{lesson.day}_{n}"
+        st.caption("🇵🇱 Polish letters:")
+        render_polish_keyboard(typed_key, keyboard_key=f"typed_keyboard_{lesson.day}_{n}")
+        typed = st.text_area("Your answer", key=typed_key)
         if st.button("Submit typed answer", key=f"typed_send_{lesson.day}_{n}"):
             if len(typed.split()) < 10:
                 st.warning("Please write at least 10 words.")
@@ -565,9 +567,12 @@ def render_chat(lesson: Lesson) -> None:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
+    chat_input_key = f"chat_input_{lesson.day}"
+    st.caption("🇵🇱 Polish letters:")
+    render_polish_keyboard(chat_input_key, keyboard_key=f"chat_keyboard_{lesson.day}")
     question = st.chat_input(
         "Ask about a word, phrase, or grammar…",
-        key=f"chat_input_{lesson.day}",
+        key=chat_input_key,
     )
 
     if not question:
