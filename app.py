@@ -94,7 +94,12 @@ if not profile.evaluation_completed or retaking_placement:
 repo = LessonRepository(session_factory, current_user.id, DATA_DIR / "audio")
 today = dt.date.today()
 if result := st.session_state.pop("placement_result", None):
-    st.success(f"Placement complete: **{result['level']}** · overall {result['overall']:.0f}% · your personalized plan is ready.")
+    st.success(f"Placement complete: **{result['level']}** · your personalized plan is ready.")
+    if result.get("skill_levels"):
+        st.caption(" · ".join(
+            f"{skill.replace('_', ' ').title()}: {level}"
+            for skill, level in result["skill_levels"].items()
+        ))
 
 
 # =========================================================================
@@ -647,6 +652,11 @@ with st.sidebar:
         st.markdown(
             f"Daily study time: **{profile.daily_study_minutes} minutes**"
         )
+        if profile.skill_profile:
+            st.markdown("**CEFR skill profile**")
+            for skill, evidence in profile.skill_profile.items():
+                level = evidence.get("level", "-") if isinstance(evidence, dict) else "legacy"
+                st.caption(f"{skill.replace('_', ' ').title()}: {level}")
 
         pending_retake = evaluation_repository.pending_review()
         unfinished_retake = evaluation_repository.current()

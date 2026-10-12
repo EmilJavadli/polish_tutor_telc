@@ -419,3 +419,24 @@ def plan_markdown() -> str:
         lines.append(f"**Week {w.number}: {w.theme_en}**: " + "; ".join(w.situations))
         lines.append("")
     return "\n".join(lines)
+
+
+# Placement helpers ---------------------------------------------------------
+PLACEMENT_START_DAY = {"A0": 1, "A1": 22, "A2": 57, "B1": 120}
+
+def placement_start_day(level: str) -> int:
+    """Map an overall CEFR placement estimate to the first suitable plan day."""
+    return PLACEMENT_START_DAY.get(level, 1)
+
+def placement_emphasis(skill_levels: dict[str, str]) -> dict:
+    """Translate a CEFR skill profile into future-plan emphasis flags."""
+    order = {"A0": 0, "A1": 1, "A2": 2, "B1": 3}
+    values = {skill: order.get(level, 0) for skill, level in skill_levels.items()}
+    weakest = min(values.values()) if values else 0
+    return {
+        "priority_skills": [skill for skill, value in values.items() if value == weakest],
+        "extra_listening": values.get("listening", 0) < 2,
+        "extra_speaking": values.get("speaking", 0) < 2,
+        "extra_writing": values.get("writing", 0) < 2,
+        "extra_grammar": values.get("grammar_vocab", 0) < 2,
+    }
