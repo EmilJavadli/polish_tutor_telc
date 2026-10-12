@@ -42,15 +42,53 @@ user_repository = UserRepository(session_factory)
 current_user = user_repository.resolve(identity)
 profile = user_repository.profile(current_user.id)
 
-# First-time users must complete placement before regular lesson routes are created.
-if not profile.evaluation_completed:
+evaluation_repository = EvaluationRepository(
+    session_factory,
+    current_user.id,
+)
+
+retaking_placement = st.session_state.get(
+    "placement_retake",
+    False,
+)
+
+# First-time users must complete placement before lessons. Returning users can
+# explicitly enter retake mode without disabling or deleting the active plan.
+if not profile.evaluation_completed or retaking_placement:
     with st.sidebar:
         st.write(identity.name or identity.email or "Google user")
-        st.session_state.daily_minutes = st.select_slider("Daily study time", [15, 30, 45, 60, 90], value=60)
-        st.session_state.target_level = st.selectbox("Target level", ["B1"], index=0)
-        if st.button("Sign out"):
+
+        if not profile.evaluation_completed:
+            st.session_state.daily_minutes = st.select_slider(
+                "Daily study time",
+                [15, 30, 45, 60, 90],
+                value=60,
+            )
+            st.session_state.target_level = st.selectbox(
+                "Target level",
+                ["B1"],
+                index=0,
+            )
+        else:
+            st.markdown(
+                f"Current level: **{profile.current_cefr_level}**"
+            )
+            st.markdown(
+                f"Target level: **{profile.target_cefr_level}**"
+            )
+
+        if st.button("Sign out", key="placement_sign_out"):
             st.logout()
-    render_placement(EvaluationRepository(session_factory, current_user.id), profile)
+
+    render_placement(
+        evaluation_repository,
+        profile,
+        mode=(
+            "initial"
+            if not profile.evaluation_completed
+            else "retake"
+        ),
+    )
     st.stop()
 
 repo = LessonRepository(session_factory, current_user.id, DATA_DIR / "audio")
@@ -598,6 +636,39 @@ with st.sidebar:
     st.title("🇵🇱 Polish Tutor")
     st.caption("TELC Polski B1 · personalized plan")
     st.write(identity.name or identity.email or "Google user")
+
+    with st.popover("👤 Profile", width="stretch"):
+        st.markdown(
+            f"Current level: **{profile.current_cefr_level}**"
+        )
+        st.markdown(
+            f"Target level: **{profile.target_cefr_level}**"
+        )
+        st.markdown(
+            f"Daily study time: **{profile.daily_study_minutes} minutes**"
+        )
+
+        pending_retake = evaluation_repository.pending_review()
+        unfinished_retake = evaluation_repository.current()
+
+        if pending_retake is not None:
+            retake_button_text = "View placement retake results"
+        elif unfinished_retake is not None:
+            retake_button_text = "Continue placement retake"
+        else:
+            retake_button_text = "🔄 Retake placement test"
+
+        if st.button(
+            retake_button_text,
+            key="retake_placement",
+            width="stretch",
+        ):
+            if pending_retake is None and unfinished_retake is None:
+                evaluation_repository.start_retake()
+
+            st.session_state["placement_retake"] = True
+            st.rerun()
+            
     if st.button("Sign out", key="sign_out"):
         st.logout()
     if not OPENAI_API_KEY:
