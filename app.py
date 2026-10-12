@@ -705,16 +705,66 @@ else:
 
 lesson_col, chat_col = st.columns([3, 2], gap="large")
 with lesson_col:
-    tabs = st.tabs([
-        f"📖 Reading · {TIME_PLAN['Reading']}′", f"🎧 Listening · {TIME_PLAN['Listening']}′",
-        f"🔤 Vocabulary · {TIME_PLAN['Words']}′", f"📐 Grammar · {TIME_PLAN['Grammar']}′",
-        f"✏️ Exercises · {TIME_PLAN['Exercises']}′", f"📝 Writing · {TIME_PLAN['Writing']}′",
-        f"🗣️ Speaking · {TIME_PLAN['Speaking']}′", f"✅ Quiz · {TIME_PLAN['Quiz']}′",
-    ])
-    renderers = [render_reading, render_listening, render_words, render_grammar,
-                 render_exercises, render_writing, render_speaking, render_quiz]
-    for tab, render in zip(tabs, renderers):
-        with tab:
-            render(lesson)
+    SECTIONS = {
+        "📖 Reading": render_reading,
+        "🎧 Listening": render_listening,
+        "🔤 Vocabulary": render_words,
+        "📐 Grammar": render_grammar,
+        "✏️ Exercises": render_exercises,
+        "📝 Writing": render_writing,
+        "🗣️ Speaking": render_speaking,
+        "✅ Quiz": render_quiz,
+        }
+    
+    section_state_key = f"active_section_{lesson.day}"
+    # Load persisted lesson UI state from PostgreSQL.
+    lesson_progress = repo.get_progress(lesson.day)
+
+    # Determine which section should initially be shown.
+    if section_state_key not in st.session_state:
+        saved_section = lesson_progress.get(
+        "active_section",
+        "📖 Reading",
+        )
+        # Defensive check in case an old/invalid value exists in the database.
+        if saved_section not in SECTIONS:
+            saved_section = "📖 Reading"
+
+        st.session_state[section_state_key] = saved_section
+
+    selected_section = st.segmented_control(
+        "Lesson section",
+        options=list(SECTIONS.keys()),
+        default=st.session_state[section_state_key],
+        key=f"section_selector_{lesson.day}",
+        label_visibility="collapsed",
+        width="stretch",
+    )
+
+    # segmented_control can technically return None.
+    if selected_section is None:
+        selected_section = st.session_state[section_state_key]
+
+    # ---------------------------------------------------------
+    # Persist the selected section only when it changes.
+    # ---------------------------------------------------------
+    previous_section = st.session_state.get(
+    f"previous_section_{lesson.day}"
+    )
+
+    if selected_section != previous_section:
+        st.session_state[section_state_key] = selected_section
+        st.session_state[f"previous_section_{lesson.day}"] = selected_section
+
+        # Update PostgreSQL without destroying the rest
+        # of the saved lesson-progress state.
+        repo.save_progress(lesson.day,
+        {
+        **lesson_progress,
+        "active_section": selected_section, },
+        )
+    SECTIONS[selected_section](lesson)
+
 with chat_col:
     render_chat(lesson)
+    
