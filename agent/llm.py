@@ -37,7 +37,17 @@ def chat_stream(messages: list[dict]) -> Iterator[str]:
 
 def transcribe(audio: bytes, filename: str = "answer.wav", context: str = "") -> str:
     """Transcribe Polish speech. Language hints are passed as `languages` (gpt-transcribe)."""
-    kwargs: dict = {"model": STT_MODEL, "file": (filename, audio)}
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else "wav"
+    mime_type = {
+        "wav": "audio/wav",
+        "webm": "audio/webm",
+        "m4a": "audio/mp4",
+        "mp4": "audio/mp4",
+        "mp3": "audio/mpeg",
+        "mpeg": "audio/mpeg",
+        "ogg": "audio/ogg",
+    }.get(extension, "application/octet-stream")
+    kwargs: dict = {"model": STT_MODEL, "file": (filename, audio, mime_type)}
     if context:
         kwargs["prompt"] = context
     if STT_MODEL.startswith("gpt-transcribe") or STT_MODEL.startswith("gpt-live"):

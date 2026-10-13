@@ -94,19 +94,7 @@ if not profile.evaluation_completed or retaking_placement:
 repo = LessonRepository(session_factory, current_user.id, DATA_DIR / "audio")
 today = dt.date.today()
 if result := st.session_state.pop("placement_result", None):
-    recommendation = result.get("start_recommendation", {})
-    start_text = (
-        f" · recommended start: day {recommendation.get('day')} "
-        f"(week {recommendation.get('week')})"
-        if recommendation else ""
-    )
-    st.success(
-        f"Placement complete: **{result['level']}**{start_text} · your personalized plan is ready."
-    )
-    if recommendation.get("reasons"):
-        with st.expander("Why this starting point?"):
-            for reason in recommendation["reasons"]:
-                st.write(f"- {reason}")
+    st.success(f"Placement complete: **{result['level']}** · overall {result['overall']:.0f}% · your personalized plan is ready.")
 
 
 # =========================================================================
@@ -420,24 +408,81 @@ def render_speaking(lesson: Lesson) -> None:
     st.caption("Speak for 1-3 minutes. Pronunciation is not assessed: feedback is based on a transcript.")
 
     n = len(repo.attempts(lesson.day, "speaking"))
-    rec = st.audio_input("🎙️ Record your answer", key=f"rec_{lesson.day}_{n}")
-    if rec is not None and st.button("Submit recording", type="primary", key=f"rec_send_{lesson.day}_{n}"):
-        audio = rec.getvalue()
-        with st.spinner("Transcribing and assessing…"):
-            try:
-                transcript = transcribe(audio, "answer.wav", context=f"{s.title}. {s.instructions_pl}")
-                if not transcript:
-                    st.warning("No speech detected. Please record again.")
-                    return
-                fb = grade_speaking(s, transcript, lesson.level)
-            except Exception as exc:
-                st.error(f"Processing failed: {exc}")
+    rec = st.audio_input(
+        "🎙️ Record your answer",
+        key=f"rec_{lesson.day}_{n}",
+        help="On a phone, allow microphone access for this site. After recording, play it back before submitting.",
+    )
+
+    if rec is not None:
+        # Mobile browsers can behave differently. Let the learner verify the
+        # recording before paying for transcription/grading.
+        st.caption("Preview your recording before submitting:")
+        st.audio(rec)
+
+        if st.button(
+            "Submit recording",
+            type="primary",
+            key=f"rec_send_{lesson.day}_{n}",
+        ):
+            audio = rec.getvalue()
+
+            # A tiny upload usually means microphone permission failed or the
+            # browser produced an unusable recording.
+            if not audio or len(audio) < 1_000:
+                st.warning(
+                    "The recording appears to be empty or too short. "
+                    "Check the browser's microphone permission, record again, "
+                    "and make sure the preview contains your voice."
+                )
                 return
-        name = repo.save_recording(lesson.day, audio)
-        repo.add_attempt(lesson.day, "speaking", SpeakingAttempt(
-            transcript=transcript, audio_file=name, result=fb, timestamp=now_iso()))
-        completed_now = after_attempt(lesson.day)
-        rerun_fragment_or_app(full_app=completed_now)
+
+            filename = getattr(rec, "name", None) or "answer.wav"
+            suffix = (
+                filename.rsplit(".", 1)[-1].lower()
+                if "." in filename
+                else "wav"
+            )
+
+            with st.spinner("Transcribing and assessing…"):
+                try:
+                    transcript = transcribe(
+                        audio,
+                        filename,
+                        context=f"{s.title}. {s.instructions_pl}",
+                    )
+                    if not transcript:
+                        st.warning(
+                            "The recording was received, but no speech was detected. "
+                            "Please listen to the preview and record again."
+                        )
+                        return
+                    fb = grade_speaking(s, transcript, lesson.level)
+                except Exception as exc:
+                    st.error(
+                        "The recording could not be processed. The audio preview "
+                        "helps determine whether this is a microphone/browser issue "
+                        f"or a transcription issue. Technical details: {exc}"
+                    )
+                    return
+
+            name = repo.save_recording(
+                lesson.day,
+                audio,
+                suffix=suffix,
+            )
+            repo.add_attempt(
+                lesson.day,
+                "speaking",
+                SpeakingAttempt(
+                    transcript=transcript,
+                    audio_file=name,
+                    result=fb,
+                    timestamp=now_iso(),
+                ),
+            )
+            completed_now = after_attempt(lesson.day)
+            rerun_fragment_or_app(full_app=completed_now)
 
     with st.expander("⌨️ No microphone? Type what you would say"):
         typed = st.text_area("Your answer", key=f"typed_{lesson.day}_{n}")
